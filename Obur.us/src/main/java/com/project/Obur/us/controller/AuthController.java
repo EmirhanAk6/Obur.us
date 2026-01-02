@@ -6,6 +6,7 @@ import com.project.Obur.us.model.entity.User;
 import com.project.Obur.us.repository.UserRepository;
 import com.project.Obur.us.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,13 +39,13 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
-            return ResponseEntity.badRequest().body("Bu email zaten kayıtlı!"); //
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Bu email adresi zaten kullanımda."));
         }
-
-        // Şifreyi BCrypt ile hashleyip kaydediyoruz
+        // Şifreyi BCrypt ile hashleyerek kaydediyoruz
         user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
-        userRepository.save(user); //
-
-        return ResponseEntity.ok(Map.of("message", "Kayıt başarılı"));
+        userRepository.save(user);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Kullanıcı başarıyla kaydedildi"));
     }
 }

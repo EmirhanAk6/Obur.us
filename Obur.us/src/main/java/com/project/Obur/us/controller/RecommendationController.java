@@ -1,8 +1,7 @@
 package com.project.Obur.us.controller;
 
-import com.project.Obur.us.model.dto.PlaceDTO;
-import com.project.Obur.us.service.PlaceService;
-import com.project.Obur.us.service.RecommenderService;
+import com.project.Obur.us.model.dto.*;
+import com.project.Obur.us.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -21,44 +20,39 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 @Validated
-@Tag(name = "Recommendations", description = "Personalized restaurant recommendation endpoints")
+@Tag(name = "Recommendations", description = "Kişiselleştirilmiş restoran öneri endpoint'leri")
 public class RecommendationController {
 
     private final PlaceService placeService;
     private final RecommenderService recommenderService;
 
     @GetMapping
-    @Operation(summary = "Get personalized recommendations")
-    public ResponseEntity<Map<String, Object>> getRecommendations(
+    @Operation(summary = "Hibrit Sıralama Önerileri",
+            description = "PostGIS adaylarını Python NLP ve hibrit motoruyla sıralar.")
+    public ResponseEntity<RecommendationResponse> getRecommendations(
             @RequestParam Double lat,
             @RequestParam Double lng,
             @RequestParam(required = false) String userId,
             @RequestParam(defaultValue = "5.0") @Min(1) @Max(50) Double radiusKm,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) Integer topK
     ) {
-        log.info("Fetching recommendations for lat: {}, lng: {}, userId: {}", lat, lng, userId);
+        log.info("Hibrit öneri isteği: lat={}, lng={}", lat, lng);
 
-        try {
-            // 1. PostGIS ile adayları getir (Metre cinsinden: radiusKm * 1000)
-            List<PlaceDTO> candidates = placeService.findNearbyPlaces(lat, lng, radiusKm * 1000, 200);
+        List<PlaceDTO> candidates = placeService.findNearbyPlaces(lat, lng, radiusKm * 1000, 200);
 
-            if (candidates.isEmpty()) {
-                return ResponseEntity.ok(Map.of("message", "No candidates found", "items", List.of()));
-            }
-
-            // 2. Python /rank endpoint'ine gönder
-            Map<String, Object> recommendations = recommenderService.getRecommendations(userId, lat, lng, candidates);
-            return ResponseEntity.ok(recommendations);
-
-        } catch (Exception e) {
-            log.error("Error in general recommendations", e);
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        if (candidates.isEmpty()) {
+            return ResponseEntity.ok(RecommendationResponse.builder()
+                    .algo("none").count(0).items(List.of()).build());
         }
+
+        RecommendationResponse response = recommenderService.getRecommendations(userId, lat, lng, candidates);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/users/{userId}")
-    @Operation(summary = "Get user-specific historical recommendations")
-    public ResponseEntity<Map<String, Object>> getUserRecommendations(
+    @Operation(summary = "Graf Tabanlı Kişiselleştirilmiş Öneriler",
+            description = "Kullanıcının geçmişine göre Neo4j üzerinden öneri getirir.")
+    public ResponseEntity<RecommendationResponse> getUserRecommendations(
             @PathVariable Long userId,
             @RequestParam Double lat,
             @RequestParam Double lng,
@@ -67,14 +61,9 @@ public class RecommendationController {
             @RequestParam(required = false) Integer priceRange,
             @RequestParam(required = false) String prefs
     ) {
-        try {
-            // RecommenderService içindeki getUserRecommendations metodunu çağırır
-            Map<String, Object> result = recommenderService.getUserRecommendations(
-                    userId, lat, lng, radiusKm, topK, priceRange, prefs);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in user recommendations", e);
-            return ResponseEntity.internalServerError().body(Map.of("error", "Failed to fetch user recommendations"));
-        }
+        log.info("Kullanıcı {} için graf önerisi başlatıldı", userId);
+        RecommendationResponse response = recommenderService.getUserRecommendations(
+                userId, lat, lng, radiusKm, topK, priceRange, prefs);
+        return ResponseEntity.ok(response);
     }
 }

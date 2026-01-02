@@ -11,6 +11,11 @@ import java.util.List;
 @Repository
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
+    /**
+     * PostGIS kullanarak yakındaki mekanları bulur.
+     * Onur'un projesindeki NLP ve Fiyat aralığı verilerini (reviews_text, price_range)
+     * otomatik olarak çeker çünkü SELECT * kullanılmaktadır.
+     */
     @Query(value = """
         SELECT *, 
                ST_Distance(location_geo, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) as distance_m
@@ -28,4 +33,13 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
             @Param("lng") Double lng,
             @Param("radius") Double radius,
             @Param("limit") Integer limit);
+
+    /**
+     * Alternatif: Belirli bir kategoriye göre en iyi NLP/Duygu skoruna sahip yerleri getirir.
+     * (Eğer Python'a göndermeden önce Java tarafında bir ön filtreleme yapmak istersen)
+     */
+    @Query("SELECT p FROM Place p WHERE p.categories LIKE %:category% AND p.ratingAvg >= :minRating")
+    List<Place> findByCategoryAndRating(
+            @Param("category") String category,
+            @Param("minRating") Double minRating);
 }

@@ -1,8 +1,6 @@
 package com.project.Obur.us.service;
 
-import com.project.Obur.us.model.dto.PlaceDTO;
-import com.project.Obur.us.model.dto.RecommendationRequest;
-import com.project.Obur.us.model.dto.RecommendationResponse;
+import com.project.Obur.us.model.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,21 +24,19 @@ public class RecommenderService {
     private int maxCandidates;
 
     /**
-     * Python Recommender servisinin /rank endpoint'ine (POST) adayları gönderir ve sıralatır.
-     * Onur'un Python tarafındaki 'rank' fonksiyonuna uygun veri yapısını hazırlar.
+     * Python /rank endpoint'ine adayları gönderir ve sıralanmış sonucu DTO olarak döner.
      */
-    public Map<String, Object> getRecommendations(
+    public RecommendationResponse getRecommendations(
             String userId,
-            Double lat,
-            Double lng,
+            Double lat, Double lng,
             List<PlaceDTO> candidates
     ) {
-        log.debug("Python servisine sıralama isteği gönderiliyor. Aday sayısı: {}", candidates.size());
+        log.debug("Adaylar Python'a gönderiliyor: user={}, count={}", userId, candidates.size());
 
         // Aday listesini Python servisinin performansı için kısıtlıyoruz
         List<Map<String, Object>> candidateList = candidates.stream()
                 .limit(maxCandidates)
-                .map(this::convertToMap)
+                .map(this::convertToMapWithNLP)
                 .collect(Collectors.toList());
 
         // Python tarafındaki pydantic modeline (RecommendationRequest) uygun body
@@ -57,28 +53,21 @@ public class RecommenderService {
                     .uri("/rank")
                     .body(Mono.just(request), RecommendationRequest.class)
                     .retrieve()
-                    .bodyToMono(Map.class)
+                    .bodyToMono(RecommendationResponse.class) // Map yerine DTO kullanıldı
                     .block();
         } catch (Exception e) {
-            log.error("Recommender /rank servisi çağrılırken hata: ", e);
-            throw new RuntimeException("Öneri sıralama işlemi başarısız: " + e.getMessage());
+            log.error("Sıralama servisi hatası", e);
+            throw new RuntimeException("Öneri sıralaması yapılamadı: " + e.getMessage());
         }
     }
 
     /**
-     * Kullanıcı geçmişine dayalı (Neo4j/Graph) öneriler için Python /users/{userId}/recommendations çağrısı yapar.
+     * Neo4j tabanlı kişiselleştirilmiş önerileri DTO olarak döner.
      */
-    public Map<String, Object> getUserRecommendations(
-            Long userId,
-            Double lat,
-            Double lng,
-            Double radiusKm,
-            Integer topK,
-            Integer priceRange,
-            String prefs
+    public RecommendationResponse getUserRecommendations(
+            Long userId, Double lat, Double lng,
+            Double radiusKm, Integer topK, Integer priceRange, String prefs
     ) {
-        log.debug("Graph tabanlı kullanıcı önerileri isteniyor: userId={}", userId);
-
         try {
             return recommenderWebClient
                     .get()
@@ -86,24 +75,21 @@ public class RecommenderService {
                             .path("/users/{userId}/recommendations")
                             .queryParam("lat", lat)
                             .queryParam("lng", lng)
-                            .queryParam("radius_km", radiusKm)
-                            .queryParam("topK", topK)
+                            .queryParam("radius_km", radiusKm != null ? radiusKm : 5.0)
+                            .queryParam("topK", topK != null ? topK : 10)
                             .queryParamIfPresent("price_range", java.util.Optional.ofNullable(priceRange))
                             .queryParamIfPresent("prefs", java.util.Optional.ofNullable(prefs))
                             .build(userId))
                     .retrieve()
-                    .bodyToMono(Map.class)
+                    .bodyToMono(RecommendationResponse.class) // Map yerine DTO kullanıldı
                     .block();
         } catch (Exception e) {
-            log.error("Kullanıcıya özel öneriler alınırken hata: ", e);
-            throw new RuntimeException("Kişiselleştirilmiş öneri servisi hatası: " + e.getMessage());
+            log.error("Kişiselleştirilmiş öneri hatası", e);
+            throw new RuntimeException("Kullanıcı graf önerisi başarısız.");
         }
     }
 
-    /**
-     * PlaceDTO nesnesini Python servisinin beklediği Map yapısına dönüştürür.
-     */
-    private Map<String, Object> convertToMap(PlaceDTO place) {
+    private Map<String, Object> convertToMapWithNLP(PlaceDTO place) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", place.getId());
         map.put("name", place.getName());
@@ -112,24 +98,15 @@ public class RecommenderService {
         map.put("categories", place.getCategories());
         map.put("rating_avg", place.getRatingAvg());
         map.put("rating_count", place.getRatingCount());
+        map.put("price_range", place.getPriceRange());
+        map.put("reviews_text", place.getReviewsText());
         return map;
     }
 
-    /**
-     * Recommender servisinin ayakta olup olmadığını kontrol eder.
-     */
     public boolean isRecommenderHealthy() {
         try {
-            Map<String, Object> response = recommenderWebClient
-                    .get()
-                    .uri("/health")
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-            return response != null && "graph_hybrid_v3".equals(response.get("algo"));
-        } catch (Exception e) {
-            log.warn("Recommender servis sağlığı kontrol edilemedi.");
-            return false;
-        }
+            Map response = recommenderWebClient.get().uri("/health").retrieve().bodyToMono(Map.class).block();
+            return response != null && (Boolean.TRUE.equals(response.get("ok")) || "ok".equals(response.get("status")));
+        } catch (Exception e) { return false; }
     }
 }

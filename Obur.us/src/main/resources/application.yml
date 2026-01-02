@@ -3,95 +3,42 @@ spring:
     name: oburus-api
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:oburus}
-    username: ${DB_USER:oburus}
+    # Yerelde localhost, Docker içinde 'db' ana bilgisayarını kullanır
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/oburus
+    # pgAdmin görselindeki 'Owner' bilgisine göre kullanıcıyı güncelledik
+    username: ${DB_USER:postgres}
+    # Şifre isteğine göre 123 olarak ayarlandı
     password: ${DB_PASS:123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
 
   jpa:
-    database-platform: org.hibernate.spatial.dialect.postgis.PostgisDialect
+    # Hibernate 6+ otomatik algılama yaptığı için database-platform kaldırıldı
     hibernate:
-      ddl-auto: validate
+      # Yeni kolonların (price_range vb.) otomatik oluşması için update modunda
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
 
-  cache:
-    type: caffeine
-    caffeine:
-      spec: maximumSize=500,expireAfterWrite=1h
-
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-    deserialization:
-      fail-on-unknown-properties: false
-
-  # ✅ CORRECT NEO4J PREFIX
   neo4j:
+    # Yerelde localhost, Docker içinde 'neo4j' ana bilgisayarını kullanır
     uri: ${NEO4J_URI:bolt://localhost:7687}
     authentication:
       username: ${NEO4J_USER:neo4j}
       password: ${NEO4J_PASS:oburus_pass}
-    pool:
-      max-connection-pool-size: 10
-      connection-acquisition-timeout: 60s
+
+recommender:
+  # Yerelde localhost, Docker içinde 'recommender' ana bilgisayarını kullanır
+  base-url: ${RECO_URL:http://localhost:8000}
+  max-candidates: 200
+
+jwt:
+  secret: ${JWT_SECRET:THIS_IS_A_VERY_LONG_SECRET_KEY_256_BITS_MINIMUM_FOR_HS256_SIGNING}
+  expiration: ${JWT_EXPIRATION:3600000}
 
 server:
   port: ${PORT:3000}
-  compression:
-    enabled: true
-  error:
-    include-message: always
-    include-stacktrace: on_param
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
-  prometheus:
-    metrics:
-      export:
-        enabled: true
-
-# Custom application properties (warnings are NORMAL)
-recommender:
-  base-url: ${RECO_URL:http://localhost:8000}
-  timeout: 30s
-  max-candidates: 200
-
-cors:
-  allowed-origins: ${ALLOWED_ORIGINS:*}
-  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
-  allowed-headers: "*"
-  max-age: 3600
-
-logging:
-  level:
-    root: INFO
-    com.oburus: ${LOG_LEVEL:DEBUG}
-    org.hibernate.SQL: ${SQL_LOG_LEVEL:DEBUG}
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-
-jwt:
-  secret: "THIS_IS_A_VERY_LONG_SECRET_KEY_256_BITS_MINIMUM"
-  expiration: 3600000
-
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-    enabled: true

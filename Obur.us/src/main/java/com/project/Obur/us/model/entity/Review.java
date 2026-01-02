@@ -2,9 +2,9 @@ package com.project.Obur.us.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
+import org.hibernate.annotations.CreationTimestamp;
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "reviews")
@@ -21,11 +21,11 @@ public class Review implements Serializable {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    private User user; //
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "place_id", nullable = false)
-    private Place place;
+    private Place place; //
 
     @Column(nullable = false)
     private Double rating;
@@ -33,11 +33,7 @@ public class Review implements Serializable {
     @Column(columnDefinition = "TEXT")
     private String text;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-    }
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt; // Onur'un şemasıyla tam uyumlu
 }
