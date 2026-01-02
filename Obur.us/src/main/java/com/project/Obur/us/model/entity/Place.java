@@ -2,7 +2,7 @@ package com.project.Obur.us.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.locationtech.jts.geom.Point; // ÖNEMLİ: java.awt.Point DEĞİL, JTS Point kullanılmalı
+import org.locationtech.jts.geom.Point;
 import java.io.Serializable;
 
 @Entity
@@ -23,7 +23,6 @@ public class Place implements Serializable {
     @Column(nullable = false)
     private String name;
 
-    // PostGIS geography tipi için JTS kütüphanesinden Point kullanılmalıdır
     @Column(name = "location_geo", nullable = false, columnDefinition = "geography(Point,4326)")
     private Point locationGeo;
 
@@ -37,10 +36,16 @@ public class Place implements Serializable {
     @Column(name = "rating_count")
     private Integer ratingCount;
 
+    // --- YENİ EKLENEN ALANLAR (Onur'un projesiyle uyum için) ---
+
+    @Column(name = "price_range")
+    private Integer priceRange; // 1, 2, 3, 4 şeklinde fiyat seviyesi
+
+    @Column(name = "reviews_text", columnDefinition = "TEXT")
+    private String reviewsText; // NLP/Sentiment analizi için ham yorum verisi
+
     private String source;
 
-    // --- KRİTİK EKLEME: Mesafe bilgisini tutacak alan ---
-    // PlaceRepository içindeki "as distance_m" sonucunun buraya dolması için gereklidir
     @Transient
     private Double distanceM;
 

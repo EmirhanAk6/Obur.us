@@ -26,33 +26,22 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        // Kimlik doğrulama işlemi
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
-
-        // Başarılı giriş sonrası token üretimi
         String token = jwtService.generateToken(request.getUsername());
-
-        // Daha profesyonel bir dönüş için LoginResponse nesnesini kullanabilirsiniz
         return ResponseEntity.ok(new LoginResponse(token));
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
-        // 1. Email kontrolü: Aynı email ile ikinci kayıt engellenmeli
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Bu email adresi zaten kullanımda."));
         }
-
-        // 2. Şifre hashleme: Şifreyi açık metin yerine BCrypt ile güvenli kaydediyoruz
-        // Not: User entity'nizdeki metod isminin setHashedPassword olduğundan emin olun
+        // Şifreyi BCrypt ile hashleyerek kaydediyoruz
         user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
-
-        // 3. Kayıt işlemi
         userRepository.save(user);
-
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of("message", "Kullanıcı başarıyla kaydedildi"));
     }

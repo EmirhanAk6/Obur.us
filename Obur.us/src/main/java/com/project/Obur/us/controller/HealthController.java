@@ -1,5 +1,6 @@
 package com.project.Obur.us.controller;
 
+import com.project.Obur.us.service.RecommenderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -16,34 +17,30 @@ import java.util.Map;
 @RequestMapping("/health")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Health", description = "Application health check endpoints")
+@Tag(name = "Health", description = "Uygulama sağlık kontrolü")
 public class HealthController {
 
+    private final RecommenderService recommenderService;
+
     @GetMapping
-    @Operation(summary = "Basic health check")
+    @Operation(summary = "Genel sağlık durumu ve servis bağımlılıkları")
     public ResponseEntity<Map<String, Object>> health() {
+        // Python servisinin durumunu kontrol et
+        boolean recommenderUp = recommenderService.isRecommenderHealthy();
+
         return ResponseEntity.ok(Map.of(
-                "ok", true,
+                "ok", recommenderUp,
                 "service", "oburus-api-spring",
-                "version", "1.0.0",
+                "recommenderStatus", recommenderUp ? "UP" : "DOWN",
                 "timestamp", LocalDateTime.now()
         ));
     }
 
     @GetMapping("/ready")
-    @Operation(summary = "Readiness probe")
+    @Operation(summary = "Hazır olma kontrolü (Readiness)")
     public ResponseEntity<Map<String, Object>> ready() {
         return ResponseEntity.ok(Map.of(
                 "status", "ready",
-                "timestamp", LocalDateTime.now()
-        ));
-    }
-
-    @GetMapping("/live")
-    @Operation(summary = "Liveness probe")
-    public ResponseEntity<Map<String, Object>> live() {
-        return ResponseEntity.ok(Map.of(
-                "status", "alive",
                 "timestamp", LocalDateTime.now()
         ));
     }

@@ -1,10 +1,8 @@
 package com.project.Obur.us.controller;
 
-import com.project.Obur.us.model.dto.PlaceDTO;
-import com.project.Obur.us.service.PlaceService;
-import com.project.Obur.us.service.RecommenderService;
+import com.project.Obur.us.model.dto.*;
+import com.project.Obur.us.service.*;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -21,7 +19,7 @@ import java.util.Map;
 @RequestMapping("/api/v1/recommendations")
 @RequiredArgsConstructor
 @Slf4j
-@Validated // Bean validation'ların çalışması için gerekli
+@Validated
 @Tag(name = "Recommendations", description = "Kişiselleştirilmiş restoran öneri endpoint'leri")
 public class RecommendationController {
 
@@ -29,83 +27,43 @@ public class RecommendationController {
     private final RecommenderService recommenderService;
 
     @GetMapping
-    @Operation(summary = "Genel önerileri al (Hibrit Sıralama)",
-            description = "Konum bazlı adayları PostGIS ile bulur ve Python servisine sıralatır.")
-    public ResponseEntity<Map<String, Object>> getRecommendations(
+    @Operation(summary = "Hibrit Sıralama Önerileri",
+            description = "PostGIS adaylarını Python NLP ve hibrit motoruyla sıralar.")
+    public ResponseEntity<RecommendationResponse> getRecommendations(
             @RequestParam Double lat,
             @RequestParam Double lng,
             @RequestParam(required = false) String userId,
             @RequestParam(defaultValue = "5.0") @Min(1) @Max(50) Double radiusKm,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) Integer topK
     ) {
-        log.info("Öneri isteği: lat={}, lng={}, userId={}, radius={}km", lat, lng, userId, radiusKm);
+        log.info("Hibrit öneri isteği: lat={}, lng={}", lat, lng);
 
-        try {
-            // 1. PostGIS kullanarak yakındaki aday mekanları çekiyoruz
-            // Onur'un api/src/index.js dosyasındaki /places mantığına benzer
-            List<PlaceDTO> candidates = placeService.findNearbyPlaces(
-                    lat, lng, radiusKm * 1000, 200
-            );
+        List<PlaceDTO> candidates = placeService.findNearbyPlaces(lat, lng, radiusKm * 1000, 200);
 
-            if (candidates.isEmpty()) {
-                return ResponseEntity.ok(Map.of(
-                        "message", "Bu bölgede uygun mekan bulunamadı",
-                        "items", List.of()
-                ));
-            }
-
-            // 2. Adayları Python servisine (/rank) gönderip sıralatıyoruz
-            Map<String, Object> recommendations = recommenderService.getRecommendations(
-                    userId, lat, lng, candidates
-            );
-
-            return ResponseEntity.ok(recommendations);
-        } catch (Exception e) {
-            log.error("Öneri alınırken hata oluştu", e);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "error", "Öneri servisi şu an yanıt vermiyor",
-                    "details", e.getMessage()
-            ));
+        if (candidates.isEmpty()) {
+            return ResponseEntity.ok(RecommendationResponse.builder()
+                    .algo("none").count(0).items(List.of()).build());
         }
+
+        RecommendationResponse response = recommenderService.getRecommendations(userId, lat, lng, candidates);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/users/{userId}")
-    @Operation(summary = "Kullanıcıya özel geçmiş bazlı öneriler",
-            description = "Graph tabanlı (Neo4j) kişiselleştirilmiş önerileri getirir.")
-    public ResponseEntity<Map<String, Object>> getUserRecommendations(
+    @Operation(summary = "Graf Tabanlı Kişiselleştirilmiş Öneriler",
+            description = "Kullanıcının geçmişine göre Neo4j üzerinden öneri getirir.")
+    public ResponseEntity<RecommendationResponse> getUserRecommendations(
             @PathVariable Long userId,
             @RequestParam Double lat,
             @RequestParam Double lng,
             @RequestParam(defaultValue = "5.0") Double radiusKm,
             @RequestParam(defaultValue = "10") Integer topK,
-            @RequestParam(required = false) @Min(1) @Max(4) Integer priceRange,
+            @RequestParam(required = false) Integer priceRange,
             @RequestParam(required = false) String prefs
     ) {
-        log.info("Kullanıcıya özel öneri isteği: userId={}, prefs={}", userId, prefs);
-
-        try {
-            // Python servisindeki /users/{user_id}/recommendations endpoint'ini çağırır
-            Map<String, Object> recommendations = recommenderService.getUserRecommendations(
-                    userId, lat, lng, radiusKm, topK, priceRange, prefs
-            );
-
-            return ResponseEntity.ok(recommendations);
-        } catch (Exception e) {
-            log.error("Kullanıcı önerisi alınırken hata", e);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "error", "Kullanıcı verileri işlenirken hata oluştu"
-            ));
-        }
-    }
-
-    @GetMapping("/health")
-    @Operation(summary = "Recommender servis durumunu kontrol et")
-    public ResponseEntity<Map<String, Object>> checkHealth() {
-        // Python servisinin /health endpoint'ine bakar
-        boolean healthy = recommenderService.isRecommenderHealthy();
-        return ResponseEntity.ok(Map.of(
-                "recommenderStatus", healthy ? "UP" : "DOWN",
-                "timestamp", System.currentTimeMillis()
-        ));
+        log.info("Kullanıcı {} için graf önerisi başlatıldı", userId);
+        RecommendationResponse response = recommenderService.getUserRecommendations(
+                userId, lat, lng, radiusKm, topK, priceRange, prefs);
+        return ResponseEntity.ok(response);
     }
 }

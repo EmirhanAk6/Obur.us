@@ -25,6 +25,14 @@ public class PlaceDTO implements Serializable {
     @JsonProperty("rating_count")
     private Integer ratingCount;
 
+    // --- YENİ EKLENEN ALANLAR ---
+
+    @JsonProperty("price_range")
+    private Integer priceRange;
+
+    @JsonProperty("reviews_text")
+    private String reviewsText;
+
     private String source;
     private Double lat;
     private Double lng;
