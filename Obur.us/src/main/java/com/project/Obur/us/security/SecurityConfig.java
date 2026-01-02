@@ -37,11 +37,11 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Production için BCrypt şarttır
+        return new BCryptPasswordEncoder(); // Şifreleri hashlemek ve doğrulamak için
     }
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
+        return config.getAuthenticationManager(); // Login işlemi için gerekli
     }
 }

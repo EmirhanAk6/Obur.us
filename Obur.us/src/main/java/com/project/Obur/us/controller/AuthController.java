@@ -18,24 +18,33 @@ import java.util.Map;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+        // Spring Security ile kimlik doğrulama
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
+
         String token = jwtService.generateToken(request.getUsername());
-        return ResponseEntity.ok(Map.of("token", token));
+        return ResponseEntity.ok(new LoginResponse(token));
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
+        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+            return ResponseEntity.badRequest().body("Bu email zaten kayıtlı!"); //
+        }
+
+        // Şifreyi BCrypt ile hashleyip kaydediyoruz
         user.setHashedPassword(passwordEncoder.encode(user.getHashedPassword()));
-        userRepository.save(user);
-        return ResponseEntity.ok("Kullanıcı başarıyla kaydedildi");
+        userRepository.save(user); //
+
+        return ResponseEntity.ok(Map.of("message", "Kayıt başarılı"));
     }
 }

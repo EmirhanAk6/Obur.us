@@ -39,6 +39,9 @@ public class Place implements Serializable {
 
     private String source;
 
+    @Transient // Veritabanı tablosunda fiziksel olarak yoktur
+    private Double distanceM;
+
     @Transient
     public Double getLatitude() {
         return locationGeo != null ? locationGeo.getY() : null;

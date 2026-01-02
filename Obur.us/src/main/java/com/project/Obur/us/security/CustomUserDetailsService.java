@@ -5,6 +5,7 @@ import com.project.Obur.us.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,11 +16,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Kullanıcı bulunamadı: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("Kullanıcı bulunamadı")); //
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
-                .password(user.getHashedPassword()) // BCrypt hash'i
+                .password(user.getHashedPassword()) // Veritabanındaki hashlenmiş şifre
                 .authorities("ROLE_USER")
                 .build();
     }

@@ -2,9 +2,10 @@ package com.project.Obur.us.service;
 
 import com.project.Obur.us.model.dto.PlaceDTO;
 import com.project.Obur.us.model.dto.RecommendationRequest;
+import com.project.Obur.us.model.dto.RecommendationResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -25,7 +26,8 @@ public class RecommenderService {
     private int maxCandidates;
 
     /**
-     * Get recommendations from Python recommender service
+     * Python Recommender servisinin /rank endpoint'ine (POST) adayları gönderir ve sıralatır.
+     * Onur'un Python tarafındaki 'rank' fonksiyonuna uygun veri yapısını hazırlar.
      */
     public Map<String, Object> getRecommendations(
             String userId,
@@ -33,14 +35,15 @@ public class RecommenderService {
             Double lng,
             List<PlaceDTO> candidates
     ) {
-        log.debug("Requesting recommendations for user: {}, location: ({}, {}), candidates: {}",
-                userId, lat, lng, candidates.size());
+        log.debug("Python servisine sıralama isteği gönderiliyor. Aday sayısı: {}", candidates.size());
 
+        // Aday listesini Python servisinin performansı için kısıtlıyoruz
         List<Map<String, Object>> candidateList = candidates.stream()
                 .limit(maxCandidates)
                 .map(this::convertToMap)
                 .collect(Collectors.toList());
 
+        // Python tarafındaki pydantic modeline (RecommendationRequest) uygun body
         RecommendationRequest request = RecommendationRequest.builder()
                 .userId(userId)
                 .lat(lat)
@@ -49,26 +52,21 @@ public class RecommenderService {
                 .build();
 
         try {
-            Map<String, Object> response = recommenderWebClient
+            return recommenderWebClient
                     .post()
                     .uri("/rank")
                     .body(Mono.just(request), RecommendationRequest.class)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-
-            log.debug("Received {} recommendations",
-                    response != null ? ((List<?>) response.get("items")).size() : 0);
-
-            return response;
         } catch (Exception e) {
-            log.error("Error calling recommender service", e);
-            throw new RuntimeException("Failed to get recommendations: " + e.getMessage(), e);
+            log.error("Recommender /rank servisi çağrılırken hata: ", e);
+            throw new RuntimeException("Öneri sıralama işlemi başarısız: " + e.getMessage());
         }
     }
 
     /**
-     * Get user-specific recommendations with preferences
+     * Kullanıcı geçmişine dayalı (Neo4j/Graph) öneriler için Python /users/{userId}/recommendations çağrısı yapar.
      */
     public Map<String, Object> getUserRecommendations(
             Long userId,
@@ -79,10 +77,10 @@ public class RecommenderService {
             Integer priceRange,
             String prefs
     ) {
-        log.debug("Getting user recommendations: userId={}, location=({},{})", userId, lat, lng);
+        log.debug("Graph tabanlı kullanıcı önerileri isteniyor: userId={}", userId);
 
         try {
-            Map<String, Object> response = recommenderWebClient
+            return recommenderWebClient
                     .get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/users/{userId}/recommendations")
@@ -96,19 +94,14 @@ public class RecommenderService {
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-
-            log.debug("Received user recommendations: {}",
-                    response != null ? ((List<?>) response.get("items")).size() : 0);
-
-            return response;
         } catch (Exception e) {
-            log.error("Error getting user recommendations", e);
-            throw new RuntimeException("Failed to get user recommendations: " + e.getMessage(), e);
+            log.error("Kullanıcıya özel öneriler alınırken hata: ", e);
+            throw new RuntimeException("Kişiselleştirilmiş öneri servisi hatası: " + e.getMessage());
         }
     }
 
     /**
-     * Convert PlaceDTO to Map for recommender service
+     * PlaceDTO nesnesini Python servisinin beklediği Map yapısına dönüştürür.
      */
     private Map<String, Object> convertToMap(PlaceDTO place) {
         Map<String, Object> map = new HashMap<>();
@@ -123,7 +116,7 @@ public class RecommenderService {
     }
 
     /**
-     * Health check for recommender service
+     * Recommender servisinin ayakta olup olmadığını kontrol eder.
      */
     public boolean isRecommenderHealthy() {
         try {
@@ -133,10 +126,9 @@ public class RecommenderService {
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-
-            return response != null && Boolean.TRUE.equals(response.get("ok"));
+            return response != null && "graph_hybrid_v3".equals(response.get("algo"));
         } catch (Exception e) {
-            log.warn("Recommender service health check failed", e);
+            log.warn("Recommender servis sağlığı kontrol edilemedi.");
             return false;
         }
     }
