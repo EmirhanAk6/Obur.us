@@ -46,6 +46,9 @@ public class Place implements Serializable {
 
     private String source;
 
+    @Transient // Veritabanı tablosunda fiziksel olarak yoktur
+    private Double distanceM;
+
     @Transient
     private Double distanceM;
 

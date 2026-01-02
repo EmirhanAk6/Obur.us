@@ -2,8 +2,8 @@ package com.project.Obur.us.service;
 
 import com.project.Obur.us.model.dto.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -33,11 +33,13 @@ public class RecommenderService {
     ) {
         log.debug("Adaylar Python'a gönderiliyor: user={}, count={}", userId, candidates.size());
 
+        // Aday listesini Python servisinin performansı için kısıtlıyoruz
         List<Map<String, Object>> candidateList = candidates.stream()
                 .limit(maxCandidates)
                 .map(this::convertToMapWithNLP)
                 .collect(Collectors.toList());
 
+        // Python tarafındaki pydantic modeline (RecommendationRequest) uygun body
         RecommendationRequest request = RecommendationRequest.builder()
                 .userId(userId)
                 .lat(lat)
